@@ -2,30 +2,48 @@ import streamlit as st
 import requests
 import pandas as pd
 import datetime
-import matplotlib.pyplot as plt
-import seaborn as sns
 
-# API Base URL
+# API Base URL and Endpoint
 BASE_URL = "https://open-api.unisat.io/v1/indexer/brc20/TRAC/history"
 
-# Function to get BRC-20 transaction history with authentication
-def get_brc20_history(type_filter, start_date, api_key):
-    headers = {"Authorization": f"Bearer {api_key}"}
-    params = {"type": type_filter, "start": 0, "limit": 20}  # Adjust limit as needed
-    response = requests.get(BASE_URL, headers=headers, params=params)
-    if response.status_code == 200:
-        data = response.json()['data']['detail']
-        df = pd.DataFrame(data)
-        df['blocktime'] = pd.to_datetime(df['blocktime'], unit='s')
-        return df[df['blocktime'] >= start_date]
-    else:
-        return pd.DataFrame()
+# Function to get BRC-20 transaction history with pagination and authentication
+def get_brc20_history(api_key, type_filter, start_date):
+    tokens = []
+    start = 0
+    limit = 100  # Adjust the limit as per API's max limit
+
+    headers = {
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    while True:
+        params = {
+            "type": type_filter,
+            "start": start,
+            "limit": limit
+        }
+
+        response = requests.get(BASE_URL, headers=headers, params=params)
+
+        if response.status_code == 200:
+            new_data = response.json()['data']['detail']
+            if not new_data:
+                break  # Exit the loop if no more data is found
+            tokens.extend(new_data)
+            start += limit  # Update start for the next iteration
+        else:
+            print(f"Error occurred: {response.text}")
+            break
+
+    df = pd.DataFrame(tokens)
+    df['blocktime'] = pd.to_datetime(df['blocktime'], unit='s')
+    return df[df['blocktime'] >= start_date]
 
 # Streamlit App
 def main():
     st.title("BRC-20 TRAC Transaction Analysis Dashboard")
 
-    # Fetch API key from Streamlit secrets
+    # Fetch API key
     api_key = st.secrets["API_KEY"]
 
     # Time Frame Selection
@@ -36,32 +54,15 @@ def main():
     start_date = datetime.datetime.now() - datetime.timedelta(days=time_frames[selected_time_frame])
 
     # Fetching transaction data
-    buy_transactions = get_brc20_history("buy", start_date, api_key)
-    sell_transactions = get_brc20_history("sell", start_date, api_key)
+    buy_transactions = get_brc20_history(api_key, "buy", start_date)
+    sell_transactions = get_brc20_history(api_key, "sell", start_date)
 
-    # Display raw data
-    st.subheader("Raw Transaction Data")
+    # Displaying data
+    st.subheader("Buy Transactions")
     st.write(buy_transactions)
 
-    # Analysis
-    st.subheader("Analysis")
-    if not buy_transactions.empty:
-        # Buyers analysis
-        top_buyers = buy_transactions.groupby('from').sum().sort_values(by='amount', ascending=False).reset_index()
-        st.write("Top Buyers", top_buyers)
-
-        # Sellers analysis
-        top_sellers = sell_transactions.groupby('to').sum().sort_values(by='amount', ascending=False).reset_index()
-        st.write("Top Sellers", top_sellers)
-
-        # Visualization
-        st.subheader("Buying Trends")
-        plt.figure(figsize=(10, 6))
-        sns.lineplot(data=buy_transactions, x='blocktime', y='amount')
-        st.pyplot(plt)
-
-    else:
-        st.write("No transactions found for the selected time frame")
+    st.subheader("Sell Transactions")
+    st.write(sell_transactions)
 
 if __name__ == "__main__":
     main()
