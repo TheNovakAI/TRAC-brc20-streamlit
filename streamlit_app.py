@@ -11,7 +11,7 @@ BASE_URL = "https://open-api.unisat.io/v1/indexer/brc20/TRAC/history"
 # Function to get BRC-20 transaction history with authentication
 def get_brc20_history(type_filter, start_date, api_key):
     headers = {"Authorization": f"Bearer {api_key}"}
-    params = {"type": type_filter, "start": 0, "limit": 100}  # Adjust limit as needed
+    params = {"type": type_filter, "start": 0, "limit": 20}  # Adjust limit as needed
     response = requests.get(BASE_URL, headers=headers, params=params)
     if response.status_code == 200:
         data = response.json()['data']['detail']
